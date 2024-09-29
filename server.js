@@ -4,7 +4,7 @@ const fs = require('fs').promises;
 const bodyParser = require('body-parser');
 
 const app = express();
-const port = 3000;
+const port = 8080;
 const dataFile = 'visitors.json';
 const feedbackFile = 'feedback.json';
 
@@ -142,7 +142,11 @@ function handleError(res, error) {
     res.status(500).send('An error occurred. Please try again later.');
 }
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}/`);
+// // Start the server
+// app.listen(port, () => {
+//     console.log(`Server running at http://localhost:${port}/`);
+// });
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${port}/`);
 });
