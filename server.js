@@ -2,11 +2,17 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
+const { exec } = require('child_process');
+require('dotenv').config(); // Load environment variables
 
 const app = express();
 const port = 8080;
 const dataFile = 'visitors.json';
 const feedbackFile = 'feedback.json';
+
+// Load GitHub credentials from environment variables
+const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
@@ -23,12 +29,10 @@ app.get('/', (req, res) => {
 // Read visitors data from file
 async function readVisitorsData() {
     try {
-        // Ensure file exists, otherwise create it with an empty array
         const data = await fs.readFile(dataFile, 'utf8');
         return JSON.parse(data) || [];
     } catch (error) {
         if (error.code === 'ENOENT') {
-            // File doesn't exist, create an empty visitors.json
             await fs.writeFile(dataFile, '[]');
             return [];
         } else {
@@ -71,9 +75,49 @@ async function writeFeedbackData(feedbacks) {
         await fs.writeFile(feedbackFile, JSON.stringify(feedbacks, null, 2));
         console.log('Feedback data saved successfully!');
     } catch (error) {
-        console.error('Error writing feedback data:', error);
+        console.error('Error writing feedback:', error);
         throw error;
     }
+}
+
+// Function to commit changes to GitHub (without pushing)
+async function commitChanges() {
+    const commitMessage = 'Update visitor/feedback data';
+
+    try {
+        // Check for uncommitted changes
+        const status = await execPromise('git status --porcelain');
+        if (!status) {
+            console.log('No changes to commit.');
+            return;
+        }
+
+        // Add modified files to the staging area
+        await execPromise(`git add ${dataFile} ${feedbackFile}`);
+
+        // Commit changes with the specified message
+        await execPromise(`git commit -m "${commitMessage}"`);
+
+        // Push changes to GitHub
+        await execPromise(`git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/mat-tp/helloIwasHere.git`);
+
+        console.log('Changes committed and pushed to GitHub.');
+    } catch (error) {
+        console.error('Error during Git operations:', error.stderr || error.message);
+    }
+}
+
+// Helper function to promisify exec
+function execPromise(command) {
+    return new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                reject({ error, stdout, stderr });
+                return;
+            }
+            resolve(stdout);
+        });
+    });
 }
 
 // Endpoint to save visitor data
@@ -86,6 +130,7 @@ app.post('/save-visitor', (req, res) => {
             return writeVisitorsData(existingVisitors);
         })
         .then(() => {
+            commitChanges(); // Call commitChanges after saving data
             res.send('Visitor data saved successfully!');
         })
         .catch(error => {
@@ -104,6 +149,7 @@ app.post('/submit-feedback', (req, res) => {
             return writeFeedbackData(existingFeedback);
         })
         .then(() => {
+            commitChanges(); // Call commitChanges after saving data
             res.send('Feedback submitted successfully!');
         })
         .catch(error => {
@@ -136,17 +182,7 @@ app.get('/get-visitors', (req, res) => {
         });
 });
 
-// Middleware to handle errors
-function handleError(res, error) {
-    console.error(error);
-    res.status(500).send('An error occurred. Please try again later.');
-}
-
-// // Start the server
-// app.listen(port, () => {
-//     console.log(`Server running at http://localhost:${port}/`);
-// });
-
+// Start the server
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}/`);
 });
