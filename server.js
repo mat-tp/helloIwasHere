@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
+const { exec } = require('child_process'); // Import child_process to run Git commands
 
 const app = express();
 const port = 8080;
@@ -23,12 +24,10 @@ app.get('/', (req, res) => {
 // Read visitors data from file
 async function readVisitorsData() {
     try {
-        // Ensure file exists, otherwise create it with an empty array
         const data = await fs.readFile(dataFile, 'utf8');
         return JSON.parse(data) || [];
     } catch (error) {
         if (error.code === 'ENOENT') {
-            // File doesn't exist, create an empty visitors.json
             await fs.writeFile(dataFile, '[]');
             return [];
         } else {
@@ -38,11 +37,13 @@ async function readVisitorsData() {
     }
 }
 
-// Write visitors data to file
+// Write visitors data to file and push to GitHub
 async function writeVisitorsData(visitors) {
     try {
         await fs.writeFile(dataFile, JSON.stringify(visitors, null, 2));
         console.log('Visitor data saved successfully!');
+        // Commit and push changes to GitHub
+        await gitCommitAndPush('Updated visitor data');
     } catch (error) {
         console.error('Error writing visitor data:', error);
         throw error;
@@ -65,11 +66,13 @@ async function readFeedbackData() {
     }
 }
 
-// Write feedback data to file
+// Write feedback data to file and push to GitHub
 async function writeFeedbackData(feedbacks) {
     try {
         await fs.writeFile(feedbackFile, JSON.stringify(feedbacks, null, 2));
         console.log('Feedback data saved successfully!');
+        // Commit and push changes to GitHub
+        await gitCommitAndPush('Updated feedback data');
     } catch (error) {
         console.error('Error writing feedback data:', error);
         throw error;
@@ -136,17 +139,25 @@ app.get('/get-visitors', (req, res) => {
         });
 });
 
-// Middleware to handle errors
-function handleError(res, error) {
-    console.error(error);
-    res.status(500).send('An error occurred. Please try again later.');
+// Git commit and push function
+function gitCommitAndPush(commitMessage) {
+    return new Promise((resolve, reject) => {
+        exec(`git add . && git commit -m "${commitMessage}" && git push`, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Git error: ${error.message}`);
+                return reject(error);
+            }
+            if (stderr) {
+                console.error(`Git stderr: ${stderr}`);
+                return reject(stderr);
+            }
+            console.log(`Git stdout: ${stdout}`);
+            resolve(stdout);
+        });
+    });
 }
 
-// // Start the server
-// app.listen(port, () => {
-//     console.log(`Server running at http://localhost:${port}/`);
-// });
-
+// Start the server
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}/`);
 });
