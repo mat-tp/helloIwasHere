@@ -2,7 +2,6 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
-
 const { exec } = require('child_process');
 require('dotenv').config(); // Load environment variables
 
@@ -109,6 +108,7 @@ async function commitChanges() {
         console.log('Changes committed and pushed to GitHub.');
     } catch (error) {
         console.error('Error during Git operations:', error.stderr || error.message);
+        throw error; // Throw to ensure it's caught in the endpoint
     }
 }
 
@@ -129,6 +129,11 @@ function execPromise(command) {
 app.post('/save-visitor', (req, res) => {
     const visitor = req.body;
 
+    // Validate the visitor object
+    if (!visitor.name || !visitor.email) {
+        return res.status(400).send('Visitor name and email are required.');
+    }
+
     readVisitorsData()
         .then(existingVisitors => {
             existingVisitors.push(visitor);
@@ -140,7 +145,7 @@ app.post('/save-visitor', (req, res) => {
         })
         .catch(error => {
             console.error('Error saving visitor data:', error);
-            res.status(500).send('Error saving visitor data');
+            res.status(500).send('Error saving visitor data. Please try again.');
         });
 });
 
@@ -159,7 +164,7 @@ app.post('/submit-feedback', (req, res) => {
         })
         .catch(error => {
             console.error('Error saving feedback:', error);
-            res.status(500).send('Error saving feedback');
+            res.status(500).send('Error saving feedback. Please try again.');
         });
 });
 
@@ -171,7 +176,7 @@ app.get('/get-feedback', (req, res) => {
         })
         .catch(error => {
             console.error('Error retrieving feedback:', error);
-            res.status(500).send('Error retrieving feedback');
+            res.status(500).send('Error retrieving feedback.');
         });
 });
 
@@ -183,7 +188,7 @@ app.get('/get-visitors', (req, res) => {
         })
         .catch(error => {
             console.error('Error retrieving visitor data:', error);
-            res.status(500).send('Error retrieving visitor data');
+            res.status(500).send('Error retrieving visitor data.');
         });
 });
 
