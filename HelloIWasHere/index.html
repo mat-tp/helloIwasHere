@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello, I Was Here!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="main-title">Hello, I Was Here Before You!</h1>
+        <h3 class="sub-title">When Did You Get Here?</h3>
+        <p class="intro-message">
+            This message is from Matlala. I believe that I reached the website first. Click the button below to let everyone know you were here!
+        </p>
+
+        <!-- Name input field -->
+        <input type="text" id="userName" placeholder="please enter your name here" />
+    
+        <button id="visitButton">I Was Here Too!</button>
+        
+     
+        <div id="timeDisplay"></div>
+        
+        <h3 class="friends-list-title">This is a List of Other Friends Who Visited:</h3>
+        <div id="nameList" class="visitor-list" style="margin-top: 20px;"></div>
+          <!-- New thank-you message display -->
+        <div id="thankYouMessage" style="margin-top: 20px; color: #4CAF50; font-weight: bold;"></div>
+    </div>
+
+    <div class="feedback-container">
+        <h3>Your Feedback Matters!</h3>
+        <textarea id="userFeedback" placeholder="What do you think about the website?"></textarea>
+        <button id="submitFeedback">Submit Feedback</button>
+        <div id="tym-feedback" class="thank-you-message-feedback"></div>
+    </div>
+    
+
+    <!-- Link to the external JavaScript file -->
+    <script src="scripts.js"></script>
+</body>
+</html>
