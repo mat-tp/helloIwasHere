@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
+
 const { exec } = require('child_process');
 require('dotenv').config(); // Load environment variables
 
@@ -42,11 +43,13 @@ async function readVisitorsData() {
     }
 }
 
-// Write visitors data to file
+// Write visitors data to file and push to GitHub
 async function writeVisitorsData(visitors) {
     try {
         await fs.writeFile(dataFile, JSON.stringify(visitors, null, 2));
         console.log('Visitor data saved successfully!');
+        // Commit and push changes to GitHub
+        await gitCommitAndPush('Updated visitor data');
     } catch (error) {
         console.error('Error writing visitor data:', error);
         throw error;
@@ -69,11 +72,13 @@ async function readFeedbackData() {
     }
 }
 
-// Write feedback data to file
+// Write feedback data to file and push to GitHub
 async function writeFeedbackData(feedbacks) {
     try {
         await fs.writeFile(feedbackFile, JSON.stringify(feedbacks, null, 2));
         console.log('Feedback data saved successfully!');
+        // Commit and push changes to GitHub
+        await gitCommitAndPush('Updated feedback data');
     } catch (error) {
         console.error('Error writing feedback:', error);
         throw error;
@@ -181,6 +186,24 @@ app.get('/get-visitors', (req, res) => {
             res.status(500).send('Error retrieving visitor data');
         });
 });
+
+// Git commit and push function
+function gitCommitAndPush(commitMessage) {
+    return new Promise((resolve, reject) => {
+        exec(`git add . && git commit -m "${commitMessage}" && git push`, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Git error: ${error.message}`);
+                return reject(error);
+            }
+            if (stderr) {
+                console.error(`Git stderr: ${stderr}`);
+                return reject(stderr);
+            }
+            console.log(`Git stdout: ${stdout}`);
+            resolve(stdout);
+        });
+    });
+}
 
 // Start the server
 app.listen(port, '0.0.0.0', () => {
