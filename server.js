@@ -82,6 +82,7 @@ async function writeFeedbackData(feedbacks) {
     }
 }
 
+/*
 // Git commit and push function
 async function gitCommitAndPush(commitMessage) {
     try {
@@ -91,6 +92,24 @@ async function gitCommitAndPush(commitMessage) {
         console.log('Changes committed and pushed to GitHub.');
     } catch (error) {
         console.error('Error during Git operations:', error);
+        throw error; // Ensure error propagation
+    }
+}
+*/
+
+// Git commit and push function
+async function gitCommitAndPush(commitMessage) {
+    try {
+        await execPromise('git add .');
+        const commitOutput = await execPromise(`git commit -m "${commitMessage}"`);
+        console.log('Git commit output:', commitOutput); // Log commit output
+
+        const pushOutput = await execPromise(`git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/mat-tp/helloIwasHere.git`);
+        console.log('Git push output:', pushOutput); // Log push output
+        
+        console.log('Changes committed and pushed to GitHub.');
+    } catch (error) {
+        console.error('Error during Git operations:', error); // Log errors during Git operations
         throw error; // Ensure error propagation
     }
 }
@@ -123,8 +142,8 @@ app.post('/save-visitor', async (req, res) => {
         await writeVisitorsData(existingVisitors);
         res.send('Visitor data saved successfully!');
     } catch (error) {
-        console.error('Error saving visitor data:', error);
-        res.status(500).send('Error saving visitor data. Please try again.');
+        console.error('Error saving visitor data:', error); // Log full error
+        res.status(500).send(`Error saving visitor data: ${error.message}`); // Send detailed error message
     }
 });
 
