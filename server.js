@@ -54,6 +54,22 @@ async function writeVisitorsData(visitors) {
     }
 }
 
+// Read feedback data from file
+async function readFeedbackData() {
+    try {
+        const data = await fs.readFile(feedbackFile, 'utf8');
+        return JSON.parse(data) || [];
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            await fs.writeFile(feedbackFile, '[]');
+            return [];
+        } else {
+            console.error('Error reading feedback data:', error);
+            throw error;
+        }
+    }
+}
+
 // Write feedback data to file and push to GitHub
 async function writeFeedbackData(feedbacks) {
     try {
