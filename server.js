@@ -18,7 +18,7 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files from the HelloIWasHere directory
+// Serve static files
 app.use(express.static(path.join(__dirname, 'HelloIWasHere')));
 
 // Define a route for the root URL to serve index.html
@@ -47,7 +47,6 @@ async function writeVisitorsData(visitors) {
     try {
         await fs.writeFile(dataFile, JSON.stringify(visitors, null, 2));
         console.log('Visitor data saved successfully!');
-        // Commit and push changes to GitHub
         await gitCommitAndPush('Updated visitor data');
     } catch (error) {
         console.error('Error writing visitor data:', error);
@@ -76,7 +75,6 @@ async function writeFeedbackData(feedbacks) {
     try {
         await fs.writeFile(feedbackFile, JSON.stringify(feedbacks, null, 2));
         console.log('Feedback data saved successfully!');
-        // Commit and push changes to GitHub
         await gitCommitAndPush('Updated feedback data');
     } catch (error) {
         console.error('Error writing feedback:', error);
@@ -84,31 +82,16 @@ async function writeFeedbackData(feedbacks) {
     }
 }
 
-// Function to commit changes to GitHub (without pushing)
-async function commitChanges() {
-    const commitMessage = 'Update visitor/feedback data';
-
+// Git commit and push function
+async function gitCommitAndPush(commitMessage) {
     try {
-        // Check for uncommitted changes
-        const status = await execPromise('git status --porcelain');
-        if (!status) {
-            console.log('No changes to commit.');
-            return;
-        }
-
-        // Add modified files to the staging area
-        await execPromise(`git add ${dataFile} ${feedbackFile}`);
-
-        // Commit changes with the specified message
+        await execPromise('git add .');
         await execPromise(`git commit -m "${commitMessage}"`);
-
-        // Push changes to GitHub
         await execPromise(`git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/mat-tp/helloIwasHere.git`);
-
         console.log('Changes committed and pushed to GitHub.');
     } catch (error) {
-        console.error('Error during Git operations:', error.stderr || error.message);
-        throw error; // Throw to ensure it's caught in the endpoint
+        console.error('Error during Git operations:', error);
+        throw error; // Ensure error propagation
     }
 }
 
@@ -126,7 +109,7 @@ function execPromise(command) {
 }
 
 // Endpoint to save visitor data
-app.post('/save-visitor', (req, res) => {
+app.post('/save-visitor', async (req, res) => {
     const visitor = req.body;
 
     // Validate the visitor object
@@ -134,81 +117,53 @@ app.post('/save-visitor', (req, res) => {
         return res.status(400).send('Visitor name and email are required.');
     }
 
-    readVisitorsData()
-        .then(existingVisitors => {
-            existingVisitors.push(visitor);
-            return writeVisitorsData(existingVisitors);
-        })
-        .then(() => {
-            commitChanges(); // Call commitChanges after saving data
-            res.send('Visitor data saved successfully!');
-        })
-        .catch(error => {
-            console.error('Error saving visitor data:', error);
-            res.status(500).send('Error saving visitor data. Please try again.');
-        });
+    try {
+        const existingVisitors = await readVisitorsData();
+        existingVisitors.push(visitor);
+        await writeVisitorsData(existingVisitors);
+        res.send('Visitor data saved successfully!');
+    } catch (error) {
+        console.error('Error saving visitor data:', error);
+        res.status(500).send('Error saving visitor data. Please try again.');
+    }
 });
 
 // Endpoint to save feedback
-app.post('/submit-feedback', (req, res) => {
+app.post('/submit-feedback', async (req, res) => {
     const feedback = req.body.feedback;
 
-    readFeedbackData()
-        .then(existingFeedback => {
-            existingFeedback.push({ feedback, timestamp: new Date().toISOString() }); // Add timestamp
-            return writeFeedbackData(existingFeedback);
-        })
-        .then(() => {
-            commitChanges(); // Call commitChanges after saving data
-            res.send('Feedback submitted successfully!');
-        })
-        .catch(error => {
-            console.error('Error saving feedback:', error);
-            res.status(500).send('Error saving feedback. Please try again.');
-        });
+    try {
+        const existingFeedback = await readFeedbackData();
+        existingFeedback.push({ feedback, timestamp: new Date().toISOString() }); // Add timestamp
+        await writeFeedbackData(existingFeedback);
+        res.send('Feedback submitted successfully!');
+    } catch (error) {
+        console.error('Error saving feedback:', error);
+        res.status(500).send('Error saving feedback. Please try again.');
+    }
 });
 
 // Endpoint to retrieve feedback
-app.get('/get-feedback', (req, res) => {
-    readFeedbackData()
-        .then(feedbacks => {
-            res.send(feedbacks);
-        })
-        .catch(error => {
-            console.error('Error retrieving feedback:', error);
-            res.status(500).send('Error retrieving feedback.');
-        });
+app.get('/get-feedback', async (req, res) => {
+    try {
+        const feedbacks = await readFeedbackData();
+        res.send(feedbacks);
+    } catch (error) {
+        console.error('Error retrieving feedback:', error);
+        res.status(500).send('Error retrieving feedback.');
+    }
 });
 
 // Endpoint to retrieve visitor data
-app.get('/get-visitors', (req, res) => {
-    readVisitorsData()
-        .then(visitors => {
-            res.send(visitors);
-        })
-        .catch(error => {
-            console.error('Error retrieving visitor data:', error);
-            res.status(500).send('Error retrieving visitor data.');
-        });
+app.get('/get-visitors', async (req, res) => {
+    try {
+        const visitors = await readVisitorsData();
+        res.send(visitors);
+    } catch (error) {
+        console.error('Error retrieving visitor data:', error);
+        res.status(500).send('Error retrieving visitor data.');
+    }
 });
-
-// Git commit and push function
-function gitCommitAndPush(commitMessage) {
-    return new Promise((resolve, reject) => {
-        exec(`git add . && git commit -m "${commitMessage}" && git push`, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Git error: ${error.message}`);
-                return reject(error);
-            }
-            if (stderr) {
-                console.error(`Git stderr: ${stderr}`);
-                return reject(stderr);
-            }
-            console.log(`Git stdout: ${stdout}`);
-            resolve(stdout);
-        });
-    });
-}
 
 // Start the server
 app.listen(port, '0.0.0.0', () => {
