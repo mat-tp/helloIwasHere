@@ -56,12 +56,17 @@ async function addVisitorToServer(visitor) {
             body: JSON.stringify(visitor)
         });
 
+        // Check if the response is OK
         if (!response.ok) {
-            throw new Error('Error saving visitor to the server');
+            const errorText = await response.text(); // Capture error details
+            throw new Error(`Error saving visitor: ${errorText}`); // Include error details in the message
         }
+
+        console.log('Visitor saved successfully'); // Log success message
+
     } catch (error) {
         console.error('Error saving visitor:', error);
-        alert('Error saving visitor. Please try again.');
+        alert(`Error saving visitor: ${error.message}`); // Display detailed error to user
     }
 }
 

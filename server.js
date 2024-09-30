@@ -54,22 +54,6 @@ async function writeVisitorsData(visitors) {
     }
 }
 
-// Read feedback data from file
-async function readFeedbackData() {
-    try {
-        const data = await fs.readFile(feedbackFile, 'utf8');
-        return JSON.parse(data) || [];
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            await fs.writeFile(feedbackFile, '[]');
-            return [];
-        } else {
-            console.error('Error reading feedback data:', error);
-            throw error;
-        }
-    }
-}
-
 // Write feedback data to file and push to GitHub
 async function writeFeedbackData(feedbacks) {
     try {
@@ -81,21 +65,6 @@ async function writeFeedbackData(feedbacks) {
         throw error;
     }
 }
-
-/*
-// Git commit and push function
-async function gitCommitAndPush(commitMessage) {
-    try {
-        await execPromise('git add .');
-        await execPromise(`git commit -m "${commitMessage}"`);
-        await execPromise(`git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/mat-tp/helloIwasHere.git`);
-        console.log('Changes committed and pushed to GitHub.');
-    } catch (error) {
-        console.error('Error during Git operations:', error);
-        throw error; // Ensure error propagation
-    }
-}
-*/
 
 // Git commit and push function
 async function gitCommitAndPush(commitMessage) {
@@ -132,8 +101,8 @@ app.post('/save-visitor', async (req, res) => {
     const visitor = req.body;
 
     // Validate the visitor object
-    if (!visitor.name || !visitor.email) {
-        return res.status(400).send('Visitor name and email are required.');
+    if (!visitor.name) {
+        return res.status(400).send('Visitor name is required.');
     }
 
     try {
@@ -142,8 +111,8 @@ app.post('/save-visitor', async (req, res) => {
         await writeVisitorsData(existingVisitors);
         res.send('Visitor data saved successfully!');
     } catch (error) {
-        console.error('Error saving visitor data:', error); // Log full error
-        res.status(500).send(`Error saving visitor data: ${error.message}`); // Send detailed error message
+        console.error('Error saving visitor data:', error);
+        res.status(500).send(`Error saving visitor data: ${error.message}`);
     }
 });
 
