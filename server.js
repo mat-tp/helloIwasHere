@@ -2,10 +2,15 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 require('dotenv').config(); // Load environment variables
 
 const app = express();
+
+// Configure Git user identity
+execSync('git config --global user.email "matlalat53@gmail.com"');
+execSync('git config --global user.name "mat-tp"');
+
 const port = 8080;
 const dataFile = 'visitors.json';
 const feedbackFile = 'feedback.json';
