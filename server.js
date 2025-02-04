@@ -2,36 +2,71 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
 const bodyParser = require('body-parser');
-const { exec, execSync } = require('child_process');
-require('dotenv').config(); // Load environment variables
+const { exec } = require('child_process');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const cors = require('cors');
+const sanitizeHtml = require('sanitize-html');
+require('dotenv').config();
 
 const app = express();
-
-// Configure Git user identity
-execSync('git config --global user.email "matlalat53@gmail.com"');
-execSync('git config --global user.name "mat-tp"');
-
-const port = 8080;
+const port = process.env.PORT || 8080;
 const dataFile = 'visitors.json';
 const feedbackFile = 'feedback.json';
 
-// Load GitHub credentials from environment variables
+// Load environment variables
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GIT_EMAIL = process.env.GIT_EMAIL;
+const GIT_NAME = process.env.GIT_NAME;
 
-// Middleware to parse JSON bodies
+// Configure Git user identity from environment variables
+if (GIT_EMAIL && GIT_NAME) {
+    exec(`git config --global user.email "${GIT_EMAIL}"`);
+    exec(`git config --global user.name "${GIT_NAME}"`);
+}
+
+// Security middleware
+app.use(helmet()); // Adds various HTTP headers for security
+app.use(cors()); // Enable CORS for all routes
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'HelloIWasHere')));
-
-// Define a route for the root URL to serve index.html
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
 });
+app.use(limiter);
 
-// Read visitors data from file
+// Constants
+const MAX_NAME_LENGTH = 50;
+const MAX_VISITORS = 1000;
+const MAX_FEEDBACK_LENGTH = 500;
+
+// Validation middleware
+const validateVisitor = (req, res, next) => {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: 'Valid name is required' });
+    }
+    
+    const sanitizedName = sanitizeHtml(name.trim(), {
+        allowedTags: [],
+        allowedAttributes: {}
+    });
+    
+    if (sanitizedName.length === 0 || sanitizedName.length > MAX_NAME_LENGTH) {
+        return res.status(400).json({ 
+            error: `Name must be between 1 and ${MAX_NAME_LENGTH} characters` 
+        });
+    }
+    
+    req.body.name = sanitizedName;
+    next();
+};
+
+// Enhanced data handling functions
 async function readVisitorsData() {
     try {
         const data = await fs.readFile(dataFile, 'utf8');
@@ -40,71 +75,33 @@ async function readVisitorsData() {
         if (error.code === 'ENOENT') {
             await fs.writeFile(dataFile, '[]');
             return [];
-        } else {
-            console.error('Error reading visitor data:', error);
-            throw error;
         }
+        throw error;
     }
 }
 
-// Write visitors data to file and push to GitHub
 async function writeVisitorsData(visitors) {
-    try {
-        await fs.writeFile(dataFile, JSON.stringify(visitors, null, 2));
-        console.log('Visitor data saved successfully!');
-        await gitCommitAndPush('Updated visitor data');
-    } catch (error) {
-        console.error('Error writing visitor data:', error);
-        throw error;
-    }
+    // Keep only the latest MAX_VISITORS entries
+    const limitedVisitors = visitors.slice(-MAX_VISITORS);
+    await fs.writeFile(dataFile, JSON.stringify(limitedVisitors, null, 2));
+    await gitCommitAndPush('Updated visitor data');
+    return limitedVisitors;
 }
 
-// Read feedback data from file
-async function readFeedbackData() {
-    try {
-        const data = await fs.readFile(feedbackFile, 'utf8');
-        return JSON.parse(data) || [];
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            await fs.writeFile(feedbackFile, '[]');
-            return [];
-        } else {
-            console.error('Error reading feedback data:', error);
-            throw error;
-        }
-    }
-}
-
-// Write feedback data to file and push to GitHub
-async function writeFeedbackData(feedbacks) {
-    try {
-        await fs.writeFile(feedbackFile, JSON.stringify(feedbacks, null, 2));
-        console.log('Feedback data saved successfully!');
-        await gitCommitAndPush('Updated feedback data');
-    } catch (error) {
-        console.error('Error writing feedback:', error);
-        throw error;
-    }
-}
-
-// Git commit and push function
 async function gitCommitAndPush(commitMessage) {
     try {
         await execPromise('git add .');
-        const commitOutput = await execPromise(`git commit -m "${commitMessage}"`);
-        console.log('Git commit output:', commitOutput); // Log commit output
-
-        const pushOutput = await execPromise(`git push https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/mat-tp/helloIwasHere.git`);
-        console.log('Git push output:', pushOutput); // Log push output
-        
-        console.log('Changes committed and pushed to GitHub.');
+        await execPromise(`git commit -m "${commitMessage}"`);
+        const remote = `https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/helloIwasHere.git`;
+        await execPromise(`git push ${remote}`);
+        console.log('Changes pushed to GitHub successfully');
     } catch (error) {
-        console.error('Error during Git operations:', error); // Log errors during Git operations
-        throw error; // Ensure error propagation
+        console.error('Git operation failed:', error);
+        // Continue execution even if Git fails
     }
 }
 
-// Helper function to promisify exec
+// Promisified exec
 function execPromise(command) {
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
@@ -117,64 +114,64 @@ function execPromise(command) {
     });
 }
 
-// Endpoint to save visitor data
-app.post('/save-visitor', async (req, res) => {
-    const visitor = req.body;
-
-    // Validate the visitor object
-    if (!visitor.name) {
-        return res.status(400).send('Visitor name is required.');
-    }
-
+// Enhanced routes
+app.post('/save-visitor', validateVisitor, async (req, res) => {
     try {
-        const existingVisitors = await readVisitorsData();
-        existingVisitors.push(visitor);
-        await writeVisitorsData(existingVisitors);
-        res.send('Visitor data saved successfully!');
+        const visitor = {
+            name: req.body.name,
+            timestamp: new Date().toISOString(),
+            ip: req.ip // Be careful with storing IP addresses (GDPR considerations)
+        };
+
+        const visitors = await readVisitorsData();
+        
+        // Check for duplicate names in the last hour
+        const lastHour = new Date(Date.now() - 60 * 60 * 1000);
+        const recentDuplicate = visitors.find(v => 
+            v.name === visitor.name && 
+            new Date(v.timestamp) > lastHour
+        );
+
+        if (recentDuplicate) {
+            return res.status(429).json({ 
+                error: 'Please wait an hour before signing again with the same name' 
+            });
+        }
+
+        const updatedVisitors = await writeVisitorsData([...visitors, visitor]);
+        
+        res.json({ 
+            message: 'Visitor recorded successfully',
+            totalVisitors: updatedVisitors.length
+        });
     } catch (error) {
-        console.error('Error saving visitor data:', error);
-        res.status(500).send(`Error saving visitor data: ${error.message}`);
+        console.error('Error saving visitor:', error);
+        res.status(500).json({ error: 'Failed to save visitor' });
     }
 });
 
-// Endpoint to save feedback
-app.post('/submit-feedback', async (req, res) => {
-    const feedback = req.body.feedback;
-
-    try {
-        const existingFeedback = await readFeedbackData();
-        existingFeedback.push({ feedback, timestamp: new Date().toISOString() }); // Add timestamp
-        await writeFeedbackData(existingFeedback);
-        res.send('Feedback submitted successfully!');
-    } catch (error) {
-        console.error('Error saving feedback:', error);
-        res.status(500).send('Error saving feedback. Please try again.');
-    }
-});
-
-// Endpoint to retrieve feedback
-app.get('/get-feedback', async (req, res) => {
-    try {
-        const feedbacks = await readFeedbackData();
-        res.send(feedbacks);
-    } catch (error) {
-        console.error('Error retrieving feedback:', error);
-        res.status(500).send('Error retrieving feedback.');
-    }
-});
-
-// Endpoint to retrieve visitor data
 app.get('/get-visitors', async (req, res) => {
     try {
         const visitors = await readVisitorsData();
-        res.send(visitors);
+        // Return only safe fields
+        const safeVisitors = visitors.map(({ name, timestamp }) => ({ 
+            name, 
+            timestamp 
+        }));
+        res.json(safeVisitors);
     } catch (error) {
-        console.error('Error retrieving visitor data:', error);
-        res.status(500).send('Error retrieving visitor data.');
+        console.error('Error retrieving visitors:', error);
+        res.status(500).json({ error: 'Failed to retrieve visitors' });
     }
 });
 
-// Start the server
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something broke!' });
+});
+
+// Start server
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}/`);
 });
